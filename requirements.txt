@@ -1,3 +1,4 @@
 pandas
 google-searchconsole
 xlsxwriter
+cloudscraper
