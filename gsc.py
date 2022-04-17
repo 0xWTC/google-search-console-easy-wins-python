@@ -7,7 +7,6 @@ import searchconsole
 import pandas
 import pathlib
 from datetime import datetime
-import os
 from tqdm import tqdm
 from newspaper import Article, Config
 import cloudscraper
@@ -156,8 +155,8 @@ def generate_dfs_list(df, domain, page):
     # remove starting dash from slug
     slug = slug.lstrip("-")
 
-    if page == "!all-pages":
-        slug = domain + "-!all-queries-"
+    if page == "all-pages":
+        slug = domain + "-all-queries-"
 
     # create a file name
     filename = "data/" + domain + "/" + slug + "-" + datestamp + ".xlsx"
@@ -170,36 +169,26 @@ def generate_dfs_list(df, domain, page):
     for key, value in dfs_dict.items():
         value.to_excel(writer, sheet_name=key, index=False)
         # set column widths
-        writer.sheets[key].set_column("A:A", 60)
-        writer.sheets[key].set_column("C:C", 30)
-        writer.sheets[key].set_column("E:E", 30)
+        writer.sheets[key].set_column("A:A", 90)
+        writer.sheets[key].set_column("B:B", 30)
+        writer.sheets[key].set_column("D:D", 30)
+        writer.sheets[key].set_column("G:G", 30)
     # close the Pandas ExcelWriter
     writer.save()
 
 
-def gsc_queries(domain, page="!all-pages", lookback_days=90, sort_by=["impressions"]):
+def gsc_queries(domain, page, lookback_days=90, sort_by=["impressions"]):
 
     webproperty = confirm_authentication(domain)
 
-    if page == "!all-pages":
-        # build the dataframe
-        df = (
-            webproperty.query.range("today", days=-abs(lookback_days))
-            .dimension("query")
-            .get()
-            .to_dataframe()
-        )
-    else:
-        df = (
-            webproperty.query.range("today", days=-abs(lookback_days))
-            .dimension("query")
-            .filter('page', page, 'contains')
-            .get()
-            .to_dataframe()
-        )
 
-    # drop the 'ctr' column from the dataframe
-    # df.drop(columns=["ctr"], inplace=True)
+    df = (
+        webproperty.query.range("today", days=-abs(lookback_days))
+        .dimension("query")
+        .filter('page', page, 'equals')
+        .get()
+        .to_dataframe()
+    )
 
     # sort the dataframe
     df = df.sort_values(by="impressions", ascending=False)
@@ -212,7 +201,7 @@ def gsc_queries(domain, page="!all-pages", lookback_days=90, sort_by=["impressio
 
 
 
-    if page != "!all-pages":
+    if page != "all-pages":
         try:
             article = get_article(page)
             # create a column in df called "exists_on_site". Populate it with 1 if the value from the column "query" is in the variable article. comparison is case insensitive. use iterrows() to iterate over the rows of the dataframe and tqdm to show a progress bar.
@@ -220,12 +209,11 @@ def gsc_queries(domain, page="!all-pages", lookback_days=90, sort_by=["impressio
                 df.at[index, "exists_on_site"] = 1 if row["query"].casefold() in article.casefold() else 0
             
             # add a column to df called "url" and populate it with the value from the column "page". Insert it as the first column in the dataframe.
-            df.insert(0, "url", page) 
+            df.insert(0, "page", page) 
         except:
             print("Error: Article not found")
 
-    # generate a list of dfs
-    generate_dfs_list(df, domain, page)
+    return df
 
 def gsc_pages(domain, lookback_days=90, sort_by=["impressions"]):
 
@@ -245,6 +233,7 @@ def gsc_pages(domain, lookback_days=90, sort_by=["impressions"]):
     # get all the values from df from the column 'page' to a list
     pages = df["page"].tolist()
 
+
     # round all numbers
     df = df.round(1)
 
@@ -254,33 +243,10 @@ def gsc_pages(domain, lookback_days=90, sort_by=["impressions"]):
 
     # write the df to .xlsx file
     datestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    df.to_excel("data/" + domain + "/" + domain + "-!pages-" + datestamp + ".xlsx", index=False)
+    df.to_excel("data/" + domain + "/" + domain + "-pages-" + datestamp + ".xlsx", index=False)
     
     # return the list of pages
     return pages
-
-def combine(property):
-    # find all files in the data folder that don't have "!pages" in the name
-    files = [f for f in os.listdir("data/" + property) if "!pages" not in f]
-    
-    # combine all .xlsx files in the files list into one file. merge same sheets together. use the first sheet as the template. 
-
-    # create a Pandas ExcelWriter using the filename
-    writer = pandas.ExcelWriter("data/" + property + "/" + property + "-!all-queries.xlsx", engine="xlsxwriter")
-
-    # write the dataframes to one excel file with the Pandas ExcelWriter. Each sheet is a dataframe with it's own sheet name derived from the dictionary key name.
-    for file in files:
-        df = pandas.read_excel("data/" + property + "/" + file)
-        df.to_excel(writer, sheet_name=file, index=False)
-        # set column widths
-        writer.sheets[file].set_column("A:A", 60)
-        writer.sheets[file].set_column("C:C", 30)
-        writer.sheets[file].set_column("E:E", 30)
-    # close the Pandas ExcelWriter
-    writer.save()
-
-
-
 
 
 def main(property, lookback_days):
@@ -290,17 +256,24 @@ def main(property, lookback_days):
     # Get the pages from Google Search Console
     pages = gsc_pages(property, lookback_days)
 
+    # create an empty dataframe
+    df_queries = pandas.DataFrame()
+
     # Get the queries for each page from Google Search Console. use tqdm to show a progress bar
     for page in tqdm(pages):
         try:
-            gsc_queries(property, page, lookback_days)
+            new_df = gsc_queries(property, page, lookback_days)
+            df_queries = pandas.concat([df_queries, new_df])
         except Exception as e:
             # sometimes GSC doesn't actually have the query data for a page that just gets a few impressions.
             print(e)
             continue
+
+    # sort the dataframe by the column "impressions"
+    df_queries = df_queries.sort_values(by="impressions", ascending=False)
     
-    # Combine all the .xlsx files in the data folder except the file that has the '!pages' string in the filename. Merge same sheets together and sort by impressions.
-    # combine(property)
+    generate_dfs_list(df_queries, property, "all-pages")
+
 
 if __name__ == "__main__":
     authenticate()
