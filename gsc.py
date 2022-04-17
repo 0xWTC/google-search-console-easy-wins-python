@@ -7,10 +7,8 @@ import searchconsole
 import pandas
 import pathlib
 from datetime import datetime
-import gzip
 import os
 from tqdm import tqdm
-from pony.orm import *
 from newspaper import Article, Config
 import cloudscraper
 import newspaper
@@ -220,6 +218,9 @@ def gsc_queries(domain, page="!all-pages", lookback_days=90, sort_by=["impressio
             # create a column in df called "exists_on_site". Populate it with 1 if the value from the column "query" is in the variable article. comparison is case insensitive. use iterrows() to iterate over the rows of the dataframe and tqdm to show a progress bar.
             for index, row in tqdm(df.iterrows(), total=len(df)):
                 df.at[index, "exists_on_site"] = 1 if row["query"].casefold() in article.casefold() else 0
+            
+            # add a column to df called "url" and populate it with the value from the column "page". Insert it as the first column in the dataframe.
+            df.insert(0, "url", page) 
         except:
             print("Error: Article not found")
 
@@ -250,12 +251,36 @@ def gsc_pages(domain, lookback_days=90, sort_by=["impressions"]):
     # print 20 from df
     # print(df.head(20))
 
+
     # write the df to .xlsx file
     datestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     df.to_excel("data/" + domain + "/" + domain + "-!pages-" + datestamp + ".xlsx", index=False)
     
     # return the list of pages
     return pages
+
+def combine(property):
+    # find all files in the data folder that don't have "!pages" in the name
+    files = [f for f in os.listdir("data/" + property) if "!pages" not in f]
+    
+    # combine all .xlsx files in the files list into one file. merge same sheets together. use the first sheet as the template. 
+
+    # create a Pandas ExcelWriter using the filename
+    writer = pandas.ExcelWriter("data/" + property + "/" + property + "-!all-queries.xlsx", engine="xlsxwriter")
+
+    # write the dataframes to one excel file with the Pandas ExcelWriter. Each sheet is a dataframe with it's own sheet name derived from the dictionary key name.
+    for file in files:
+        df = pandas.read_excel("data/" + property + "/" + file)
+        df.to_excel(writer, sheet_name=file, index=False)
+        # set column widths
+        writer.sheets[file].set_column("A:A", 60)
+        writer.sheets[file].set_column("C:C", 30)
+        writer.sheets[file].set_column("E:E", 30)
+    # close the Pandas ExcelWriter
+    writer.save()
+
+
+
 
 
 def main(property, lookback_days):
@@ -274,8 +299,8 @@ def main(property, lookback_days):
             print(e)
             continue
     
-    # Get data query from Google Search Console
-    gsc_queries(property, "!all-pages", lookback_days)
+    # Combine all the .xlsx files in the data folder except the file that has the '!pages' string in the filename. Merge same sheets together and sort by impressions.
+    # combine(property)
 
 if __name__ == "__main__":
     authenticate()
