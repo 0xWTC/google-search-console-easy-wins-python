@@ -29,21 +29,35 @@ def get_article(url):
         article.parse()
         article.nlp()
 
-        article = str(article.title) + str(article.text)
-        return article
+        # count words in article.text
+        word_count = len(article.text.split())
+
+        # create a dictionary that contains the article title, text, and the word_count
+        article_dict = {
+            "title": article.title,
+            "text": article.text,
+            "word_count": word_count
+        }
+
+        return article_dict
+
     except Exception as error:
         print(error)
         return ("", "")
 
 def authenticate():
     # Authenticate to Google Search Console
-    # check if is credentials.json exists in current directory
-    if "credentials.json" in pathlib.Path.cwd().glob("**/*"):
+    # check if credentials.json doesn't exist in current directory
+    if not pathlib.Path("credentials.json").is_file():
         print("credentials.json not found in current directory")
-        account = searchconsole.authenticate(
-            client_config="client_secrets.json", serialize="credentials.json"
+        # if it doesn't exist, create it
+        searchconsole.authenticate(
+            client_config="client_secrets.json", credentials="credentials.json"
         )
+    else:
+        print("credentials.json found in current directory")
 
+    
 def confirm_authentication(domain):
     # Get data from Google Search Console
     account = searchconsole.authenticate(
@@ -141,10 +155,6 @@ def generate_dfs_list(df, domain, page):
     }
 
     # save the dataframes to an excel file in a folder called data in a subfolder called after the domain name and each file is named after the datestamp
-    # create a folder called data in the current directory
-    pathlib.Path("data").mkdir(parents=True, exist_ok=True)
-    # create a subfolder called after the domain name
-    pathlib.Path("data/" + domain).mkdir(parents=True, exist_ok=True)
     # create a datestamp with the current date and time
     datestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
@@ -162,8 +172,8 @@ def generate_dfs_list(df, domain, page):
     filename = "data/" + domain + "/" + slug + "-" + datestamp + ".xlsx"
     filename = filename.replace("--", "-")
 
-    # create a Pandas ExcelWriter using the filename
-    writer = pandas.ExcelWriter(filename, engine="xlsxwriter")
+    # create a Pandas ExcelWriter using the filename. The first column 'page' is filled with urls but should be written as strings, not clickable urls.
+    writer = pandas.ExcelWriter(filename, engine='xlsxwriter', options={'strings_to_urls': False})
 
     # write the dataframes to one excel file with the Pandas ExcelWriter. Each sheet is a dataframe with it's own sheet name derived from the dictionary key name.
     for key, value in dfs_dict.items():
@@ -173,6 +183,8 @@ def generate_dfs_list(df, domain, page):
         writer.sheets[key].set_column("B:B", 30)
         writer.sheets[key].set_column("D:D", 30)
         writer.sheets[key].set_column("G:G", 30)
+        writer.sheets[key].set_column("H:H", 30)
+        writer.sheets[key].set_column("I:I", 90)
     # close the Pandas ExcelWriter
     writer.save()
 
@@ -199,19 +211,28 @@ def gsc_queries(domain, page, lookback_days=90, sort_by=["impressions"]):
     # print the dataframe including the top 10 queries and all columns
     # print(df.head(20))
 
-
-
     if page != "all-pages":
         try:
-            article = get_article(page)
-            # create a column in df called "exists_on_site". Populate it with 1 if the value from the column "query" is in the variable article. comparison is case insensitive. use iterrows() to iterate over the rows of the dataframe and tqdm to show a progress bar.
+            article_dict = get_article(page)
+            # create a column in df called "exists_on_site". Populate with the number of query strings found in article_dict[title] and article_dict[text]. comparison is case insensitive. use iterrows() to iterate over the rows of the dataframe and tqdm to show a progress bar.
             for index, row in tqdm(df.iterrows(), total=len(df)):
-                df.at[index, "exists_on_site"] = 1 if row["query"].casefold() in article.casefold() else 0
-            
+                df.at[index, "exists_on_site"] = 0
+                if row["query"].casefold() in article_dict["title"].casefold():
+                    df.at[index, "exists_on_site"] += 1
+                # count number of times query.casefold() is found in article_dict[text].casefold()
+                df.at[index, "exists_on_site"] += article_dict["text"].casefold().count(row["query"].casefold())
+                
             # add a column to df called "url" and populate it with the value from the column "page". Insert it as the first column in the dataframe.
             df.insert(0, "page", page) 
-        except:
-            print("Error: Article not found")
+
+            # add a column to the end of df called "word_count" and populate it with article_dict[word_count]
+            df.insert(len(df.columns), "word_count", article_dict["word_count"])
+
+            # add a column to df called "title" and populate it with article_dict[title]
+            df.insert(len(df.columns), "title", article_dict["title"])
+
+        except Exception as error:
+            print(error)
 
     return df
 
@@ -253,6 +274,11 @@ def main(property, lookback_days):
     # Authenticate to Google Search Console
     authenticate()
 
+    # create a folder called data in the current directory
+    pathlib.Path("data").mkdir(parents=True, exist_ok=True)
+    # create a subfolder called after the domain name
+    pathlib.Path("data/" + property).mkdir(parents=True, exist_ok=True)
+
     # Get the pages from Google Search Console
     pages = gsc_pages(property, lookback_days)
 
@@ -276,8 +302,6 @@ def main(property, lookback_days):
 
 
 if __name__ == "__main__":
-    authenticate()
-
     # run the main function. ask the user for the domain name and the lookback days
     main(input("Enter the domain name without https/www: "), int(input("Enter the lookback days: ")))
 
