@@ -11,7 +11,7 @@ from tqdm import tqdm
 from newspaper import Article, Config
 import cloudscraper
 import newspaper
-
+import openpyxl
 
 def get_article(url):
     '''
@@ -52,7 +52,7 @@ def authenticate():
         print("credentials.json not found in current directory")
         # if it doesn't exist, create it
         searchconsole.authenticate(
-            client_config="client_secrets.json", credentials="credentials.json"
+            client_config="client_secrets.json", serialize="credentials.json"
         )
     else:
         print("credentials.json found in current directory")
@@ -187,6 +187,28 @@ def generate_dfs_list(df, domain, page):
         writer.sheets[key].set_column("I:I", 90)
     # close the Pandas ExcelWriter
     writer.save()
+
+    # write the dataframe to another excel file with the Pandas ExcelWriter. write only the first sheet.
+    # create a file name
+    filename = "data/" + domain + "/" + slug + "-first-sheet-" + datestamp + ".xlsx"
+    filename = filename.replace("--", "-")
+
+    writer = pandas.ExcelWriter(filename, engine='xlsxwriter', options={'strings_to_urls': False})
+
+    for key, value in dfs_dict.items():
+        value.to_excel(filename, sheet_name=key, index=False)
+        # set column widths
+        # writer.sheets[key].set_column("A:A", 90)
+        # writer.sheets[key].set_column("B:B", 30)
+        # writer.sheets[key].set_column("D:D", 30)
+        # writer.sheets[key].set_column("G:G", 30)
+        # writer.sheets[key].set_column("H:H", 30)
+        # writer.sheets[key].set_column("I:I", 90)
+        break
+    # close the Pandas ExcelWriter
+    writer.save()
+
+
 
 
 def gsc_queries(domain, page, lookback_days=90, sort_by=["impressions"]):

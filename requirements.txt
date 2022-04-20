@@ -2,3 +2,4 @@ pandas
 google-searchconsole
 xlsxwriter
 cloudscraper
+openpyxl
