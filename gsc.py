@@ -67,11 +67,24 @@ def confirm_authentication(domain):
     # to print available properties and their IDs
     # print("\nAvailable properties:")
     # print(account.webproperties)
-    # concat 'sc-domain:' + domain
-    property = "sc-domain:" + domain
+
+    # search for domain in account.webproperties and print it the item
+    for item in account.webproperties:
+        if domain in str(item):
+            # property equals the item
+            property = str(item)
+            # replace "<searchconsole.account.WebProperty(url='" in property variable with ""
+            property = property.replace("<searchconsole.account.WebProperty(url='", "")
+            # replace "')>" in property variable with ""
+            property = property.replace("')>", "")
+
+
+    # print(property)
 
     # assign the property ID to a variable
     webproperty = account[property]
+
+    print(webproperty)
 
     return webproperty
 
@@ -325,5 +338,9 @@ def main(property, lookback_days):
 
 if __name__ == "__main__":
     # run the main function. ask the user for the domain name and the lookback days
-    main(input("Enter the domain name without https/www: "), int(input("Enter the lookback days: ")))
+    domain = input("Enter the domain name without https/www: ")
+    lookback_days = int(input("Enter the lookback days: "))
 
+    main(domain, lookback_days)
+
+    print("Done!")
