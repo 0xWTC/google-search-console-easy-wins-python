@@ -299,7 +299,7 @@ def gsc_pages(domain, lookback_days=90, sort_by=["impressions"]):
 
     # write the df to .xlsx file
     datestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    df.to_excel("data/" + domain + "/" + domain + "-pages-" + datestamp + ".xlsx", index=False)
+    df.to_excel("data/" + domain + "/" + domain + "-pages-" + str(lookback_days) + "-days-" + datestamp + ".xlsx", index=False)
     
     # return the list of pages
     return pages
