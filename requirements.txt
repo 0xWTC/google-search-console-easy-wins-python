@@ -1,5 +1,4 @@
 pandas == 1.4.2
-google-searchconsole
 xlsxwriter == 3.0.3
 cloudscraper == 1.2.58
 openpyxl == 3.0.9
