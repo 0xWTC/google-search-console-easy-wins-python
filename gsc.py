@@ -12,6 +12,8 @@ from newspaper import Article, Config
 import cloudscraper
 import newspaper
 import openpyxl
+import nltk
+nltk.download('punkt')
 
 def get_article(url):
     '''
